@@ -6,7 +6,7 @@ Protein engineering is fundamentally limited by the vastness of protein sequence
 
 The framework integrates ESM-2 sequence embeddings with graph convolutional networks (GCN), graph attention, and multi-head attention to represent changes between wild-type and mutant proteins. It provides zero-shot scoring, two-stage fine-tuning, full-sequence scanning, selected-mutation prediction, binary filters, and task-specific prediction for ΔΔG, ΔSol, and ΔTm.
 
-<img width="6286" height="3674" alt="github" src="https://github.com/user-attachments/assets/d958ebc9-d83d-4a87-91cc-1f9483a466a5" />
+<img width="6286" height="3674" alt="图片5" src="https://github.com/user-attachments/assets/c6b32184-dcd0-4b0e-8e83-6781e0bffe25" />
 
 ## Repository Structure
 
