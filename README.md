@@ -6,7 +6,7 @@ Protein engineering is fundamentally limited by the vastness of protein sequence
 
 The framework integrates ESM-2 sequence embeddings with graph convolutional networks (GCN), graph attention, and multi-head attention to represent changes between wild-type and mutant proteins. It provides zero-shot scoring, two-stage fine-tuning, full-sequence scanning, selected-mutation prediction, binary filters, and task-specific prediction for ΔΔG, ΔSol, and ΔTm.
 
-The current implementation supports single-amino-acid substitutions. The model architecture uses ESM-2 and graph neural networks; the MAMBA-pro name is the project name.
+<img width="6286" height="3674" alt="github" src="https://github.com/user-attachments/assets/d958ebc9-d83d-4a87-91cc-1f9483a466a5" />
 
 ## Repository Structure
 
