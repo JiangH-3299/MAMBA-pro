@@ -1,53 +1,78 @@
 # MAMBA-pro
 
-MAMBA-pro 是用于蛋白质单点突变预测的项目，提供零样本适应度评分、两阶段微调、二分类筛选器，以及 ΔΔG、ΔTm 和溶解度变化预测入口。
+## Overview
 
-本目录是原 GLRP 项目的独立改名副本。展示名称为 **MAMBA-pro**，Python 类、脚本和权重文件使用 **MAMBA_pro**，因为 Python 标识符不能包含连字符。此次改名保留原有 ESM-2、GCN、图注意力和预测头结构，未引入 Mamba 状态空间模块。
+Protein engineering is fundamentally limited by the vastness of protein sequence space and the scarcity of experimentally characterized variants. **MAMBA-pro combines mutation-centered global and local representations to support protein mutation scoring and adaptation to experimental objectives.** Its pretrained representations can be fine-tuned using experimental mutation data.
 
-## 目录
+The framework integrates ESM-2 sequence embeddings with graph convolutional networks (GCN), graph attention, and multi-head attention to represent changes between wild-type and mutant proteins. It provides zero-shot scoring, two-stage fine-tuning, full-sequence scanning, selected-mutation prediction, binary filters, and task-specific prediction for ΔΔG, ΔSol, and ΔTm.
+
+The current implementation supports single-amino-acid substitutions. The model architecture uses ESM-2 and graph neural networks; the MAMBA-pro name is the project name.
+
+## Repository Structure
 
 ```text
 MAMBA-pro/
-├── MAMBA_pro_zeroshot.py        # 零样本预测
-├── MAMBA_pro_predict.py         # 指定序列和权重的预测
-├── MAMBA_pro_finetune.py        # 两阶段微调流水线
-├── MAMBA_pro_ddg_predict.py     # ΔΔG 预测
-├── MAMBA_pro_dtm_predict.py     # ΔTm 预测
-├── MAMBA_pro_dsol_predict.py    # 溶解度变化三分类
-├── model.py                    # MAMBA_pro 模型类
-├── loader.py                   # 序列、结构特征及数据集
-├── models/                     # 四个预训练权重
-├── PDBs/                       # 放置用户提供的 PDB
-├── finetune/                   # 微调和评估
-├── filters/                    # 二分类筛选器训练和预测
-├── utils/                      # ESM-2、图处理、网络及损失函数
-├── tools/generate_mutations.py # 生成突变 CSV
-├── requirements.txt
-└── migration_manifest.json     # 原始文件 SHA-256，用于核对未修改原项目
+├── MAMBA_pro_ddg_predict.py   # ΔΔG prediction
+├── MAMBA_pro_dsol_predict.py  # Solubility-change classification
+├── MAMBA_pro_dtm_predict.py   # ΔTm prediction
+├── MAMBA_pro_predict.py       # Prediction with a user-provided sequence
+├── MAMBA_pro_zeroshot.py      # Zero-shot prediction
+├── MAMBA_pro_finetune.py      # Two-stage fine-tuning pipeline
+├── loader.py                 # Feature calculation and data loading
+├── model.py                  # MAMBA_pro model
+├── requirements.txt          # Python dependencies
+├── PDBs/                     # User-provided protein structures
+├── filters/                  # Binary filter training and inference
+├── finetune/                 # Fine-tuning modules
+├── models/                   # Pretrained models
+│   ├── MAMBA_pro.pkl
+│   ├── MAMBA_pro_ddg.pkl
+│   ├── MAMBA_pro_dsol.pkl
+│   └── MAMBA_pro_dtm.pkl
+├── utils/                    # ESM-2, graph, and attention components
+└── tools/
+    └── generate_mutations.py # Mutation-list generation
 ```
 
-## 安装
+## Installation
 
-建议使用独立的 Python 3.10 或更新版本环境。在本目录执行：
+Run the following commands from the repository root:
 
 ```bash
 conda create -n mamba-pro python=3.10 -y
 conda activate mamba-pro
-cd MAMBA-pro
 python -m pip install -r requirements.txt
 ```
 
-如果终端已经位于本目录，跳过 `cd MAMBA-pro`。GPU 运行需要与本机 CUDA 环境匹配的 PyTorch。依赖文件未锁定版本；本次基础检查使用 Python 3.12、PyTorch 2.7.1 CPU 环境。
+For GPU execution, install a CUDA-compatible PyTorch build for your system. The examples below use `--device cuda:0`; select another available GPU or use `--device cpu` as needed.
 
-ESM-2 使用 `esm2_t33_650M_UR50D`，产生 1280 维残基特征。首次真正提取特征时，`fair-esm` 会按其缓存机制加载或下载预训练模型，需要网络或预先准备的缓存。ESM-2 默认在双 GPU 环境使用 `cuda:1`，单 GPU 使用 `cuda:0`，无 GPU 使用 CPU；预测脚本的 `--device` 控制预测网络所在设备。CPU 提取大型模型特征可能较慢。
+ESM-2 (`esm2_t33_650M_UR50D`) is loaded on the first feature-extraction call and requires downloaded weights or an existing local cache. Its embedding device is selected automatically: `cuda:1` when at least two GPUs are available, otherwise `cuda:0` or CPU. The command-line `--device` option controls the prediction network.
 
-## 输入数据
+## Usage
 
-将结构文件放在 `PDBs/<id>.pdb`。突变格式为 `A10V`：野生型 A、序列第 10 位、替换为 V；位置从 1 开始，对应提取出的序列顺序，不能直接使用存在缺号的 PDB 残基编号。`wt` 表示野生型。当前特征流程面向单点突变。
+**Place your structures in `PDBs/` under the repository root**, for example `PDBs/1abc.pdb`. Use the filename without `.pdb` as the protein `id`.
 
-建议使用清理过的单模型 PDB，每个残基保留一个 CA 原子，序列与结构顺序一致。局部结构使用突变位点及其 32 个近邻；全局特征公式含 `长度 - 33`，因此要求结构含 **至少 34 个残基**。
+Run `python <script> --help` for the available options. Replace `1abc`, example mutations, and `YOUR_FULL_WT_SEQUENCE` with your own data. Sequence arguments must contain the complete wild-type sequence.
 
-指定突变的 CSV：
+Mutations use the format `A10V`: alanine at sequence position 10 is replaced by valine. Positions are **1-based sequence indices**, which may differ from PDB residue numbers. Use structures with consistent sequence and CA-atom ordering and at least 34 residues in the structure used for feature extraction.
+
+### 1. Zero-shot prediction
+
+Predict directly from a PDB file; the wild-type sequence is extracted automatically.
+
+**Full scan** — generate all 19 non-wild-type substitutions at each position:
+
+```bash
+python MAMBA_pro_zeroshot.py --device cuda:0 -m models/MAMBA_pro.pkl -p 1abc -o MAMBA_pro_pred_zeroshot.csv full
+```
+
+**Selected mutations:**
+
+```bash
+python MAMBA_pro_zeroshot.py --device cuda:0 -m models/MAMBA_pro.pkl -p 1abc -o MAMBA_pro_pred_zeroshot_sites.csv sites --csv sites.csv
+```
+
+`sites.csv` requires the columns `id,wt,mut`:
 
 ```csv
 id,wt,mut
@@ -55,95 +80,86 @@ id,wt,mut
 1abc,wt,G25D
 ```
 
-此处及下文的 `1abc`、突变和序列都是格式示例，使用前应替换成自己的真实数据。基础预测同一次调用中的 CSV 应对应指定的同一个 PDB 和野生型序列。
+Use mutations matching the selected protein's sequence. The output contains `id,wt,mut,fitness`; the base model returns a sigmoid score between 0 and 1.
 
-微调 CSV 需要 `id,wt,mut,label,wt_seq`；同一次基础微调应使用同一条野生型序列。筛选器训练使用相同列，`label` 必须为 0 或 1。
+### 2. Fine-tuning
 
-## 零样本预测
+Adapt the pretrained model using experimental data and teacher predictions through two training stages: first freeze the backbone and train the MLP, then fine-tune all parameters.
 
-自动从 PDB 提取野生型序列。`full` 扫描全部位点，每个位点生成 19 个非野生型替换；`sites` 读取指定突变。
-
-```bash
-python MAMBA_pro_zeroshot.py --device cuda:0 --pdb 1abc --output zeroshot_full.csv full
-python MAMBA_pro_zeroshot.py --device cuda:0 --pdb 1abc --output zeroshot_sites.csv sites --csv sites.csv
-```
-
-默认权重为 `models/MAMBA_pro.pkl`；可通过 `--model` 指定其他权重。输出列为 `id,wt,mut,fitness`，基础模型输出 sigmoid 评分，范围为 0–1。
-
-## 指定序列预测
-
-`--seq` 必须是完整野生型序列，长度需与提取出的 PDB 序列一致。下面的 `YOUR_FULL_WT_SEQUENCE` 为占位符。
+Input CSV columns: `id,wt,mut,label,wt_seq`. The `id` is the PDB filename without `.pdb`, `label` is the experimental measurement, and `wt_seq` is the complete wild-type sequence. Use a single wild-type sequence per fine-tuning run.
 
 ```bash
-python MAMBA_pro_predict.py --device cuda:0 --model models/MAMBA_pro.pkl --pdb 1abc --seq YOUR_FULL_WT_SEQUENCE --output predictions.csv sites --csv sites.csv
-python MAMBA_pro_predict.py --device cuda:0 --model models/MAMBA_pro.pkl --pdb 1abc --seq YOUR_FULL_WT_SEQUENCE --output saturation.csv full
+python MAMBA_pro_finetune.py --device cuda:0 --output_path round2 --model models/MAMBA_pro.pkl --data R1_exp.csv
 ```
 
-## 微调
+Weights and prediction results are saved under `round2/model_step1`, `round2/result_step1`, `round2/model_step2`, and `round2/result_step2`.
+
+The pipeline adds or replaces a `teacher` column in the input CSV, so use a working copy of experimental data. Training transforms labels using `(label + 15) / 30`; ensure that your label scale is appropriate. Model selection evaluates the supplied data; use a separate held-out dataset for independent performance assessment.
+
+### 3. Prediction
+
+Use a user-provided wild-type sequence with structural information from the PDB file. The sequence must align with the structure and match the extracted PDB sequence length. Supply pretrained or fine-tuned weights through `--model`.
+
+**Full scan:**
 
 ```bash
-python MAMBA_pro_finetune.py --device cuda:0 --model models/MAMBA_pro.pkl --data experimental.csv --fold_number 3 --output_path outputs/finetune
+python MAMBA_pro_predict.py --device cuda:0 -m models/MAMBA_pro.pkl -p 1abc -s YOUR_FULL_WT_SEQUENCE -o MAMBA_pro_pred.csv full
 ```
 
-流水线先生成教师评分，然后冻结 GCN、图注意力和全局特征投影层进行第一阶段训练，第二阶段解冻训练。结果保存在 `model_step1`、`result_step1`、`model_step2`、`result_step2` 中，包括每折权重和预测详情。
-
-原有训练代码使用 `(label + 15) / 30` 的数值变换，请确认实验标签符合任务的标度。流水线会向输入 CSV 写入 `teacher` 列，运行前建议使用数据副本。当前流水线在同一输入数据上评估并选择模型，不能将该结果作为独立测试集性能；正式性能评估需要另设保留测试集。
-
-## 任务专用预测
-
-全局选项（如 `--model`、`--device`、`--output`、`--pdb-dir`）放在子命令 `single_seq` 或 `multi_seqs` **之前**。`--chain` 指定的链同时用于序列和结构特征提取。
-
-单条蛋白质指定链的全位点扫描：
+**Selected mutations:**
 
 ```bash
-python MAMBA_pro_ddg_predict.py --device cuda:0 --model models/MAMBA_pro_ddg.pkl --output ddg.csv --pdb-dir PDBs single_seq --pdb 1abc --chain A
-python MAMBA_pro_dtm_predict.py --device cuda:0 --model models/MAMBA_pro_dtm.pkl --output dtm.csv --pdb-dir PDBs single_seq --pdb 1abc --chain A
-python MAMBA_pro_dsol_predict.py --device cuda:0 --model models/MAMBA_pro_dsol.pkl --output dsol.csv --pdb-dir PDBs single_seq --pdb 1abc --chain A
+python MAMBA_pro_predict.py --device cuda:0 -m models/MAMBA_pro.pkl -p 1abc -s YOUR_FULL_WT_SEQUENCE -o MAMBA_pro_pred_sites.csv sites --csv sites.csv
 ```
 
-多序列输入 CSV 需要 `id,chain,wt,mut,wt_seq`，每行的完整序列必须与对应结构链一致：
+### 4. Filters
+
+Train binary classifiers with `label = 0` (negative) or `label = 1` (positive). Training CSV columns: `id,wt,mut,label,wt_seq`.
+
+**Training filters:**
 
 ```bash
-python MAMBA_pro_ddg_predict.py --device cuda:0 --model models/MAMBA_pro_ddg.pkl --output ddg.csv multi_seqs --csv task_mutations.csv
-python MAMBA_pro_dtm_predict.py --device cuda:0 --model models/MAMBA_pro_dtm.pkl --output dtm.csv multi_seqs --csv task_mutations.csv
-python MAMBA_pro_dsol_predict.py --device cuda:0 --model models/MAMBA_pro_dsol.pkl --output dsol.csv multi_seqs --csv task_mutations.csv
+python filters/quick_start_batch.py --data full_data.csv -m models/MAMBA_pro.pkl -o results --device cuda:0
 ```
 
-ΔΔG 和 ΔTm 脚本将网络输出映射为 `30 × fitness - 15`，写入 `fitness` 列。具体物理单位与正负方向取决于原权重训练标签，本代码没有提供可独立核实的训练数据说明。溶解度输出 `negative`、`neutral`、`positive` 三类，并包含 `class_id`、`confidence`、`prob_neg`、`prob_neu`、`prob_pos`。
+Each seed produces a directory such as `results/results_seed42_<timestamp>/`, containing `step1/models` and `step2/models`.
 
-## 二分类筛选器
+**Using filters:**
 
-训练多个随机种子的筛选器：
+Set `--saved_model` to the actual directory containing the trained `.pkl` files. Replace `<timestamp>` below with the value generated during training.
 
 ```bash
-python filters/quick_start_batch.py --data binary_labels.csv --model models/MAMBA_pro.pkl --output outputs/filters --device cuda:0 --start_seed 42 --end_seed 51
+python filters/run_filters.py --saved_model "results/results_seed42_<timestamp>/step2/models" -p 1abc -s YOUR_FULL_WT_SEQUENCE -o filter_preds.csv --device cuda:0 --mode full
 ```
 
-使用训练后的筛选器集合。`--saved_model` 应指向实际存放筛选器 `.pkl` 文件的目录：
+For selected-mutation prediction, replace `--mode full` with `--mode sites --csv sites.csv`. The CSV requires `id,wt,mut`.
+
+### 5. ΔΔG / ΔSol / ΔTm
+
+The three task-specific scripts share the same command structure, with a corresponding model for each task.
+
+**Single protein — saturation mutagenesis of one PDB chain:**
 
 ```bash
-python filters/run_filters.py --saved_model outputs/filters/saved_model --pdb 1abc --seq YOUR_FULL_WT_SEQUENCE --output filter_predictions.csv --device cuda:0 --mode sites --csv sites.csv
+python MAMBA_pro_ddg_predict.py --device cuda:0 -m models/MAMBA_pro_ddg.pkl -o ddg_predictions.csv single_seq -p 1abc --chain A
+python MAMBA_pro_dsol_predict.py --device cuda:0 -m models/MAMBA_pro_dsol.pkl -o dsol_predictions.csv single_seq -p 1abc --chain A
+python MAMBA_pro_dtm_predict.py --device cuda:0 -m models/MAMBA_pro_dtm.pkl -o dtm_predictions.csv single_seq -p 1abc --chain A
 ```
 
-将示例中的模型目录替换为训练产生的实际目录。结果分析入口为 `filters/analyze_batch_results.py`，完整选项可通过 `--help` 查看。
-
-## 生成突变列表
-
-创建 `residues.txt`，每行写一个真实位点，例如 `A10`、`G25`，再运行：
+**Multiple proteins — predict mutations listed in a CSV:**
 
 ```bash
-python tools/generate_mutations.py residues.txt --id 1abc --output sites.csv
+python MAMBA_pro_ddg_predict.py --device cuda:0 -m models/MAMBA_pro_ddg.pkl -o ddg_predictions.csv multi_seqs --csv test.csv
+python MAMBA_pro_dsol_predict.py --device cuda:0 -m models/MAMBA_pro_dsol.pkl -o dsol_predictions.csv multi_seqs --csv test.csv
+python MAMBA_pro_dtm_predict.py --device cuda:0 -m models/MAMBA_pro_dtm.pkl -o dtm_predictions.csv multi_seqs --csv test.csv
 ```
 
-每个位点生成 19 个替换。该工具保留原有交互行为，结束时会等待回车。
+- `single_seq`: scan one PDB chain; the default chain is `A`.
+- `multi_seqs`: read a CSV with columns `id,chain,wt,mut,wt_seq`. Each sequence must match its corresponding structural chain.
+- PDB files are read from `./PDBs/` by default. To change this, place `--pdb-dir PATH` before `single_seq` or `multi_seqs`.
+- ΔΔG and ΔTm predictions are written to `fitness` after the transformation `30 × score − 15`. Units and sign conventions follow the training labels and are not specified by the scripts.
+- ΔSol predicts three classes: `negative`, `neutral`, and `positive`, with class probabilities and confidence scores.
 
-## 改名兼容性与验证
+## Reference
 
-- `from model import GLRP` 改为 `from model import MAMBA_pro`；新副本入口使用 `MAMBA_pro_*.py`。
-- 四个权重文件只改文件名，内容与原文件逐字节一致；网络参数名保持不变，原有 `state_dict` 可由新类加载。
-- 修正零样本及筛选器的默认权重路径；ESM-2 延迟加载并支持 CPU 回退。
-- 任务专用预测将 `--pdb-dir` 与链选择传递到结构特征提取；增加过短结构和越界位置检查。
-- 已检查全部 Python 文件语法、六个主入口的 `--help`、四个权重的严格加载及 CPU 网络前向计算，并核对原项目文件未被修改。
-- 相同权重和输入下，原模型与新模型的输出逐值一致；合成双链 PDB 检查覆盖了自定义结构目录、链筛选和三个任务入口的参数传递（ESM 特征使用模拟数据）。
-
-本次未运行真实 ESM-2 特征提取、GPU 推理或完整微调；运行环境尚未安装 `fair-esm`，项目也未附带示例 PDB 和实验 CSV。以上检查确认改名与网络权重兼容，不能替代真实数据上的预测和训练验证。
+Publication and citation details will be added when available.
